@@ -37,8 +37,11 @@ Valora addresses these using a dynamic hybrid architecture and a rigorous evalua
 | Hybrid-SVD    | Content + CF + Latent factors  | Strongest       | Full personalization       |
 
 ---
+## Project Pipeline
 
-## ⚙️ Architecture Overview
+<img width="3695" height="432" alt="mermaid-diagram" src="https://github.com/user-attachments/assets/aeff4d39-60ae-4915-bb8b-f5dfab2afd54" />
+
+##  Architecture Overview
 
 ```
 User Input (Movie + Strategy + User ID)
@@ -64,74 +67,33 @@ Ranked Recommendations
 
 ##  Engineering Highlights
 
-###  1. Dynamic Hybrid Weighting
+1. Dynamic Hybrid Weighting
+   
+Adaptive blending of content and collaborative signals based on user rating history.
+Cold-start users receive higher content weighting, while experienced users leverage behavioral signals.
 
-Alpha (content weight) adapts based on user interaction history:
+3. CF Coverage Handling
 
-* 0 ratings → content-heavy
-* Moderate history → balanced
-* Rich history → collaborative-heavy
+Implements content-similarity proxy when a seed movie is absent from the CF matrix.
+Prevents empty outputs and ensures meaningful hybrid differentiation.
 
-Prevents overfitting and improves cold-start stability.
+3. Leakage-Free Offline Evaluation
 
----
+Per-user chronological 80/20 split with user-centric seed selection.
+Evaluated using Precision@K, Recall@K, Hit Rate, and RMSE to ensure realistic performance measurement.
 
-###  2. CF Coverage Gap Fix
+4. Matrix Factorization (SVD)
 
-If a seed movie is missing from the collaborative similarity matrix:
+Mean-centered ratings with TruncatedSVD to capture latent user–item factors.
+Includes personalized ranking and global fallback for unknown users.
 
-* System finds nearest content-similar movie
-* Uses it as CF proxy
-* Prevents empty or degenerate results
+5. Popularity Bias Mitigation
 
-This ensures Hybrid ≠ Content.
+Optional log-based popularity penalty to reduce dominance of highly popular titles and improve ranking diversity.
 
----
+6. Robust Production Utilities
 
-###  3. Proper Offline Evaluation
-
-Implements:
-
-* Per-user chronological 80/20 split
-* Train-only hybrid alpha computation
-* User-centric seed selection for evaluation
-* No test leakage
-
-Metrics:
-
-* Precision@K
-* Recall@K
-* Hit Rate
-* RMSE (for SVD)
-
-Avoids the common zero-precision bug caused by global seed usage.
-
----
-
-###  4. Matrix Factorization
-
-* sklearn TruncatedSVD
-* Mean-centered ratings
-* Full reconstructed prediction matrix
-* Global latent ranking fallback for unknown users
-
-No heavy Surprise dependency → deployable anywhere.
-
----
-
-###  5. Popularity Bias Control
-
-Optional ranking adjustment:
-Allows niche content discovery.
-
----
-
-###  6. Robust Poster Retrieval System
-
-* Cached API calls
-* Fallback via TMDB search endpoint
-* Placeholder fallback
-* No broken UI states
+Poster retrieval with caching and multi-level fallback to prevent UI failures and broken states.
 
 ---
 
@@ -173,18 +135,6 @@ valora-movie-recommender/
 
 ---
 
-##  Deployment Ready
-
-* Streamlit Cloud
-* AWS EC2
-* Render
-* Azure
-* Railway
-
-Lightweight dependencies, no GPU requirement.
-
----
-
 ##  Tech Stack
 
 * Python
@@ -197,7 +147,7 @@ Lightweight dependencies, no GPU requirement.
 
 ---
 
-##  This Demonstrates
+##  This Project Demonstrates
 
 * Applied machine learning engineering
 * Hybrid model design
@@ -208,3 +158,29 @@ Lightweight dependencies, no GPU requirement.
 * Model comparison & diagnostics
 
 ---
+## Future Improvements
+
+* Neural collaborative filtering
+* Implicit feedback modeling
+* Time-aware recommendation (temporal decay)
+* ANN search (FAISS) for scalability
+* Online A/B testing framework
+
+---
+
+## Run Locally
+git clone https://github.com/shreyajoshi144/valora-movie-recommendation-engine.git    
+cd valora-movie-recommendation-engine    
+pip install -r requirements.txt    
+streamlit run app.py       
+
+App will launch at:
+http://localhost:8501
+
+Ensure the following files exist inside the data/ folder:
+
+* tmdb_5000_movies.csv
+* movielens_movies.csv
+* movielens_ratings.csv
+---
+If you found this project useful, consider starring the repository.
