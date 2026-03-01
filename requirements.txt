@@ -1,18 +1,6 @@
-# Streamlit for the web UI
-streamlit==1.30.0
-
-# Data handling
-pandas
-numpy==1.26.0
-
-# Image handling
-Pillow==10.1.0
-
-# Machine Learning
-scikit-learn==1.3.2
-
-# Optional (for progress bars or utilities, if needed)
-tqdm==4.66.3
-
-# For mapping, parsing
-astor==0.8.1
+streamlit>=1.32.0
+pandas>=2.0.0
+numpy>=1.26.0
+scikit-learn>=1.4.0
+scipy>=1.12.0
+requests>=2.31.0
