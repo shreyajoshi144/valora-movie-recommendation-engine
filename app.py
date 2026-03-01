@@ -1,20 +1,15 @@
 """
 app.py — Valora Movie Recommender  |  Streamlit UI
-Backward-compatible upgrade: all original UI preserved + new features.
-
-NEW
-───
-• Strategy options: Hybrid-SVD, SVD
+• Strategy options
 • Popularity Penalty toggle in sidebar
 • Full evaluation panel (Precision@K, Recall@K, Hit Rate, RMSE)
 • Strategy comparison table
 """
-
 import streamlit as st
 import pandas as pd
 import os
 import logging
-
+import ast
 logging.basicConfig(level=logging.INFO)
 
 from recommender.utils import (
@@ -24,6 +19,7 @@ from recommender.utils import (
     map_movielens_to_tmdb,
     build_tmdb_ratings_matrix,
     get_actual_poster,
+    precache_posters_from_tmdb_df,
 )
 from recommender.hybrid_engine import HybridRecommender
 from recommender.evaluation import (
@@ -43,7 +39,7 @@ st.set_page_config(
 
 
 # ─────────────────────────────────────────────────────────────────────
-# THEME (Netflix-inspired: mostly black, subtle red accents, premium fonts)
+# THEME
 # ─────────────────────────────────────────────────────────────────────
 import base64
 from pathlib import Path
@@ -67,7 +63,7 @@ def apply_netflix_theme(bg_path='assets/bg.png'):
         }}
         """
     else:
-        # Fallback: subtle pattern (no external asset required)
+        # Fallback: subtle pattern
         bg_css = """
         .stApp {
             background-image:
@@ -210,12 +206,13 @@ apply_netflix_theme(NETFLIX_BG_PATH)
 
 
 # ─────────────────────────────────────────────────────────────────────
-# DATA + ENGINE INIT  (cached across sessions)
+# DATA + ENGINE INIT
 # ─────────────────────────────────────────────────────────────────────
 
 @st.cache_resource(show_spinner="Initialising Valora engine")
 def initialize_system():
     tmdb     = load_tmdb_movies()
+    precache_posters_from_tmdb_df(tmdb)
     ml_m     = load_movielens_movies()
     ml_r     = load_movielens_ratings()
     mapping  = map_movielens_to_tmdb(tmdb, ml_m)
@@ -244,6 +241,40 @@ def score_label_for_strategy(strategy: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────
+# Genre Explorer helpers
+# ─────────────────────────────────────────────────────────────────────
+def _parse_genre_names(genres_val) -> list[str]:
+    """Parse tmdb_df['genres'] (TMDB-5000 style) into a list of genre names."""
+    if genres_val is None or (isinstance(genres_val, float) and pd.isna(genres_val)):
+        return []
+    try:
+        items = ast.literal_eval(genres_val) if isinstance(genres_val, str) else genres_val
+        if isinstance(items, list):
+            out = []
+            for it in items:
+                if isinstance(it, dict) and it.get("name"):
+                    out.append(str(it["name"]).strip())
+            return out
+    except Exception:
+        pass
+    # Fallback: handle "Action|Adventure" or "Action, Adventure"
+    if isinstance(genres_val, str):
+        return [g.strip() for g in genres_val.replace("|", ",").split(",") if g.strip()]
+    return []
+
+
+@st.cache_data(show_spinner=False)
+def _all_genres_from_tmdb(tmdb_df: pd.DataFrame) -> list[str]:
+    """Return sorted unique genres available in tmdb_df."""
+    s = set()
+    for g in tmdb_df.get("genres", []):
+        for name in _parse_genre_names(g):
+            s.add(name)
+    return sorted(s)
+
+
+
+# ─────────────────────────────────────────────────────────────────────
 # SIDEBAR
 # ─────────────────────────────────────────────────────────────────────
 
@@ -263,7 +294,7 @@ with st.sidebar:
         unsafe_allow_html=True
     )
     movie_list = sorted(tmdb_df["title"].unique())
-    # --- Sidebar: Controls (clean + technical) ---
+    # --- Sidebar: Controls  ---
     movie_list = sorted(tmdb_df["title"].unique())
     selected_movie_name = st.selectbox(
         "Search movie",
@@ -271,13 +302,14 @@ with st.sidebar:
         help="Pick a seed movie to generate recommendations."
     )
 
-    # User-facing labels (clean + technical)
+    # User-facing labels
     STRATEGY_UI = {
         "Hybrid": "Hybrid",
         "Hybrid + SVD": "Hybrid-SVD",
         "Content": "Content-Based",
         "Collaborative": "Collaborative",
         "Matrix Factorization (SVD)": "SVD",
+        "Browse by Genre": "GENRE",
     }
     strategy_label = st.radio(
         "Recommendation strategy",
@@ -324,7 +356,7 @@ with st.sidebar:
 # ─────────────────────────────────────────────────────────────────────
 # MAIN AREA
 # ─────────────────────────────────────────────────────────────────────
-# --- Floating Contact Button (Top Right) ---
+
 st.markdown(
     """
     <style>
@@ -438,8 +470,34 @@ STRATEGY_DESC = {
         "Item-item collaborative filtering leveraging user interaction patterns and behavioral similarity.",
     "SVD":
         "Matrix factorization (Singular Value Decomposition) modeling latent user–item preference signals (requires User ID).",
+    "GENRE":
+        "Browse top titles by selected genre(s), ranked by ratings and popularity.",
 }
 st.info(f"**{strategy}** — {STRATEGY_DESC.get(strategy, '')}")
+
+# ─────────────────────────────────────────────────────────────────────
+# Genre Explorer — main screen controls
+# ─────────────────────────────────────────────────────────────────────
+selected_genres = []
+genre_match_mode = "ANY"
+
+if strategy == "GENRE":
+    st.markdown("#### Choose your genre")
+    st.caption("Choose one or more genres to explore movies. After selecting, click **Get recommendations** in the sidebar.")
+    selected_genres = st.multiselect(
+        "Select genre(s)",
+        options=_all_genres_from_tmdb(tmdb_df),
+        default=[],
+    )
+    genre_match_mode = st.radio(
+        "Match mode",
+        ["ANY", "ALL"],
+        horizontal=True,
+        help="ANY = match at least one selected genre. ALL = must contain every selected genre."
+    )
+    st.markdown("---")
+
+
 
 if strategy == "SVD" and selected_user is None:
     st.warning("SVD strategy requires a User ID. Please select one in the sidebar.")
@@ -453,89 +511,130 @@ if strategy == "Hybrid-SVD" and selected_user is None:
 # ─────────────────────────────────────────────────────────────────────
 
 if predict_btn:
-    needs_seed = strategy in {"Content-Based", "Collaborative", "Hybrid", "Hybrid-SVD"}
+    if strategy == "GENRE":
+        if not selected_genres:
+            st.error("Please select at least one genre first.")
+        else:
+            def _match(movie_genres: list[str]) -> bool:
+                if genre_match_mode == "ALL":
+                    return all(g in movie_genres for g in selected_genres)
+                return any(g in movie_genres for g in selected_genres)
 
-    if needs_seed and selected_movie_name == "":
-        st.error("Please select a seed movie first!")
+            with st.spinner("Finding genre-based picks…"):
+                df = tmdb_df.copy()
+                df["_genre_list"] = df["genres"].apply(_parse_genre_names)
+                filtered = df[df["_genre_list"].apply(_match)]
+
+                if filtered.empty:
+                    st.warning("No movies found for that genre combination. Try ANY mode or fewer genres.")
+                    filtered = pd.DataFrame()
+                else:
+                    filtered = filtered.sort_values(
+                        by=["vote_average", "popularity"],
+                        ascending=False
+                    ).head(top_k)
+
+            if not filtered.empty:
+                st.markdown(f"### Picks for: **{', '.join(selected_genres)}**")
+                cols = st.columns(min(6, len(filtered)))
+                for i, (_, row) in enumerate(filtered.iterrows()):
+                    with cols[i % len(cols)]:
+                        img_url = get_actual_poster(int(row["tmdb_id"]), title=row.get("title", ""))
+                        st.markdown(f"""
+                            <div class="movie-card">
+                                <img src="{img_url}" style="width:100%; border-radius:5px;">
+                                <div class="movie-title">{row['title']}</div>
+                                <div class="score-tag"><b>Rating</b>: {float(row.get('vote_average', 0.0)):.2f}</div>
+                                <div class="strategy-tag">GENRE</div>
+                            </div>
+                        """, unsafe_allow_html=True)
     else:
-        seed_id = None
-        if selected_movie_name:
-            seed_id = int(tmdb_df[tmdb_df["title"] == selected_movie_name]["tmdb_id"].values[0])
+        needs_seed = strategy in {"Content-Based", "Collaborative", "Hybrid", "Hybrid-SVD"}
 
-        with st.spinner("Scanning database…"):
-            recommendations = hybrid_engine.recommend(
-                user_id=selected_user,
-                seed_movie_id=seed_id,
-                strategy=strategy,
-                top_k=top_k,
-                penalise_popularity=penalise_pop,
-            )
+        if needs_seed and selected_movie_name == "":
+            st.error("Please select a seed movie first!")
+        else:
+            seed_id = None
+            if selected_movie_name:
+                seed_id = int(tmdb_df[tmdb_df["title"] == selected_movie_name]["tmdb_id"].values[0])
 
-        if recommendations:
-            label = f"Because you liked **{selected_movie_name}**:" if selected_movie_name else "Top Picks For You:"
-            st.markdown(f"### {label}")
+            with st.spinner("Scanning database…"):
+                recommendations = hybrid_engine.recommend(
+                    user_id=selected_user,
+                    seed_movie_id=seed_id,
+                    strategy=strategy,
+                    top_k=top_k,
+                    penalise_popularity=penalise_pop,
+                )
 
-            cols = st.columns(min(6, len(recommendations)))
-            score_label = score_label_for_strategy(strategy)
-            for i, rec in enumerate(recommendations):
-                col_index = i % len(cols)
-                with cols[col_index]:
-                    img_url = get_actual_poster(rec["tmdb_id"], title=rec.get("title", ""))
-                    score   = rec.get("similarity_score", rec.get("svd_score", 0.0))
-                    st.markdown(f"""
-                        <div class="movie-card">
-                            <img src="{img_url}" style="width:100%; border-radius:5px;">
-                            <div class="movie-title">{rec['title']}</div>
-                            <div class="score-tag"><b>{score_label}</b>: {score:.2f}</div>
-                            <div class="strategy-tag">{strategy}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
+            if recommendations:
+                label = f"Because you liked **{selected_movie_name}**:" if selected_movie_name else "Top Picks For You:"
+                st.markdown(f"### {label}")
+
+                cols = st.columns(min(6, len(recommendations)))
+                score_label = score_label_for_strategy(strategy)
+                for i, rec in enumerate(recommendations):
+                    col_index = i % len(cols)
+                    with cols[col_index]:
+                        img_url = get_actual_poster(rec["tmdb_id"], title=rec.get("title", ""))
+                        score   = rec.get("similarity_score", rec.get("svd_score", 0.0))
+                        st.markdown(f"""
+                            <div class="movie-card">
+                                <img src="{img_url}" style="width:100%; border-radius:5px;">
+                                <div class="movie-title">{rec['title']}</div>
+                                <div class="score-tag"><b>{score_label}</b>: {score:.2f}</div>
+                                <div class="strategy-tag">{strategy}</div>
+                            </div>
+                        """, unsafe_allow_html=True)
 
 
-            # ── Full offline comparison table ────────────────────────
-            if show_compare:
-                st.divider()
-                st.subheader("📈 Strategy Comparison")
-                st.caption("Evaluates on 20% held-out test set (up to 100 users) — may take ~30s")
-
-                with st.spinner("Running offline evaluation…"):
-                    def _make_func(s, sid):
-                        def _fn(uid):
-                            recs = hybrid_engine.recommend(
-                                user_id=uid,
-                                seed_movie_id=sid,
-                                strategy=s,
-                                top_k=top_k,
-                            )
-                            return [r["tmdb_id"] for r in recs]
-                        return _fn
-
-                    strategy_funcs = {
-                        name: _make_func(name, seed_id)
-                        for name in ["Hybrid", "Content-Based", "Collaborative"]
-                    }
-                    if selected_user:
-                        strategy_funcs["SVD"] = _make_func("SVD", seed_id)
-
-                    cmp_df = compare_strategies(
-                        strategy_funcs,
-                        mapped_ratings,
-                        top_k=top_k,
-                        svd_model=hybrid_engine.svd_model,
-                        max_users=100,
-                        engine=hybrid_engine,   # FIX: user-centric seeding
+                # ── Full offline comparison table ────────────────────────
+                if show_compare:
+                    st.divider()
+                    st.subheader("📈 Strategy Comparison")
+                    st.caption(
+                        "Offline evaluation using per-user chronological 80/20 holdout (up to 100 users). "
+                        "This benchmark is computed across a user sample and is independent of the selected movie."
                     )
 
-                # Format
-                fmt = {c: "{:.3f}" for c in cmp_df.columns if c != "n_users_evaluated"}
-                try:
-                    styled = cmp_df.style.format(fmt).background_gradient(cmap="RdYlGn", axis=0)
-                except Exception:
-                    styled = cmp_df
-                st.dataframe(styled, use_container_width=True)
+                    with st.spinner("Running offline evaluation…"):
+                        def _make_func(s, sid):
+                            def _fn(uid):
+                                recs = hybrid_engine.recommend(
+                                    user_id=uid,
+                                    seed_movie_id=sid,
+                                    strategy=s,
+                                    top_k=top_k,
+                                )
+                                return [r["tmdb_id"] for r in recs]
+                            return _fn
 
-        else:
-            st.warning("No recommendations found. Try a different movie or strategy.")
+                        strategy_funcs = {
+                            name: _make_func(name, seed_id)
+                            for name in ["Hybrid", "Content-Based", "Collaborative"]
+                        }
+                        if selected_user:
+                            strategy_funcs["SVD"] = _make_func("SVD", seed_id)
+
+                        cmp_df = compare_strategies(
+                            strategy_funcs,
+                            mapped_ratings,
+                            top_k=top_k,
+                            svd_model=hybrid_engine.svd_model,
+                            max_users=100,
+                            engine=hybrid_engine,   # FIX: user-centric seeding
+                        )
+
+                    # Format
+                    fmt = {c: "{:.3f}" for c in cmp_df.columns if c != "n_users_evaluated"}
+                    try:
+                        styled = cmp_df.style.format(fmt).background_gradient(cmap="RdYlGn", axis=0)
+                    except Exception:
+                        styled = cmp_df
+                    st.dataframe(styled, use_container_width=True)
+
+            else:
+                st.warning("No recommendations found. Try a different movie or strategy.")
 else:
     st.markdown("""
     <div style='text-align:center; margin-top:80px; color:#555;'>
