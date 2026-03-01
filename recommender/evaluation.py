@@ -314,7 +314,7 @@ def evaluate_user_holdout(
 
     Returns dict with: precision_at_k, recall_at_k, hit, n_test_relevant, n_train, rmse (optional)
     """
-    train_df, test_df = train_test_split_ratings(ratings_df, test_size=0.2)
+    train_df, test_df = train_test_split_ratings(ratings_df, test_ratio=0.20)
 
     user_train = train_df[train_df["userId"] == user_id]
     user_test = test_df[test_df["userId"] == user_id]
@@ -349,7 +349,7 @@ def evaluate_user_holdout(
 
     prec = precision_at_k(recs, relevant_test, top_k)
     rec = recall_at_k(recs, relevant_test, top_k)
-    hit = hit_rate(recs, relevant_test, top_k)
+    hit = hit_rate(recs, relevant_test)
 
     rmse_val = None
     if hasattr(engine, "svd_model") and getattr(engine, "svd_model", None) is not None and strategy in ("SVD", "Hybrid-SVD"):

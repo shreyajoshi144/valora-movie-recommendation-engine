@@ -1,25 +1,33 @@
 """
 utils.py — Shared utilities for Valora recommender system.
 Backward-compatible: all original public functions preserved.
-NEW: normalize_scores(), improved get_actual_poster() with cache + search fallback.
+Poster system upgraded for deployment stability:
+- env-based TMDB key (with optional fallback)
+- stronger ID validation
+- safer HTTP calls + timeouts
+- cache pre-warm support from tmdb_5000_movies.csv poster_path
 """
 
-import pandas as pd
-import numpy as np
+import os
 import re
-import requests
 import logging
+from pathlib import Path
 from difflib import get_close_matches
+
+import numpy as np
+import pandas as pd
+import requests
 
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────
-# In-memory poster cache (avoids repeated API calls)
+# In-memory poster cache
 # ─────────────────────────────────────────────
 _poster_cache: dict = {}
 _tmdb_id_cache: dict = {}   # title → tmdb_id fallback cache
+TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 
-TMDB_API_KEY = "3b2b7ca05ea4688646c32685258868ea"
+
 TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 PLACEHOLDER = "https://placehold.co/500x750/1a1a1a/e50914?text=Poster+Unavailable"
 
@@ -40,9 +48,6 @@ def clean_title(title: str) -> str:
 # ─────────────────────────────────────────────
 # Robust path resolution (works when script is run from any cwd)
 # ─────────────────────────────────────────────
-from pathlib import Path
-import os
-
 def resolve_data_path(path: str) -> str:
     """Resolve a data file path reliably across different working directories."""
     p = Path(path)
@@ -74,6 +79,7 @@ def resolve_data_path(path: str) -> str:
         f"Could not find data file '{path}'. Tried (sample): {tried}. "
         "Fix by placing files under a 'data/' folder at project root, or pass an absolute path."
     )
+
 
 # ─────────────────────────────────────────────
 # Load TMDB data
@@ -132,7 +138,7 @@ def create_user_item_matrix(ratings_df):
 
 
 # ─────────────────────────────────────────────
-# NEW: Score normalisation utility
+# Score normalisation utility
 # ─────────────────────────────────────────────
 def normalize_scores(score_dict: dict) -> dict:
     """
@@ -144,13 +150,12 @@ def normalize_scores(score_dict: dict) -> dict:
     values = np.array(list(score_dict.values()), dtype=float)
     min_v, max_v = values.min(), values.max()
     if max_v - min_v < 1e-9:
-        # All scores identical → assign uniform mid-point
         return {k: 0.5 for k in score_dict}
     return {k: float((v - min_v) / (max_v - min_v)) for k, v in score_dict.items()}
 
 
 # ─────────────────────────────────────────────
-# NEW: Popularity-bias penalty
+# Popularity-bias penalty
 # ─────────────────────────────────────────────
 def apply_popularity_penalty(score_dict: dict, tmdb_df: pd.DataFrame) -> dict:
     """
@@ -166,17 +171,61 @@ def apply_popularity_penalty(score_dict: dict, tmdb_df: pd.DataFrame) -> dict:
 
 
 # ─────────────────────────────────────────────
-# IMPROVED: Poster fetching with cache + search fallback
+# Poster pre-cache (optional)
 # ─────────────────────────────────────────────
+def precache_posters_from_tmdb_df(tmdb_df: pd.DataFrame) -> int:
+    """
+    Pre-warm _poster_cache using poster_path already available in tmdb_5000_movies.csv.
+    This avoids most live API calls and improves stability on deployment.
+    Returns number of posters cached.
+    """
+    if tmdb_df is None or tmdb_df.empty:
+        return 0
+
+    cached = 0
+    if "poster_path" not in tmdb_df.columns:
+        return 0
+
+    for _, row in tmdb_df[["tmdb_id", "poster_path"]].dropna().iterrows():
+        tmdb_id = row["tmdb_id"]
+        path = row["poster_path"]
+        try:
+            key = str(int(tmdb_id))
+        except Exception:
+            continue
+        if key not in _poster_cache and isinstance(path, str) and path.strip():
+            _poster_cache[key] = f"{TMDB_IMAGE_BASE}{path}"
+            cached += 1
+    return cached
+
+
+# ─────────────────────────────────────────────
+# Poster fetching with cache + search fallback
+# ─────────────────────────────────────────────
+def _safe_int_tmdb_id(tmdb_id):
+    """Convert tmdb_id to int if valid, else None."""
+    try:
+        if tmdb_id is None:
+            return None
+        if str(tmdb_id).lower() == "nan":
+            return None
+        return int(tmdb_id)
+    except Exception:
+        return None
+
+
 def _fetch_poster_by_id(tmdb_id: int) -> str | None:
     """Direct TMDB movie endpoint."""
+    if not TMDB_API_KEY:
+        return None
     try:
-        url = f"https://api.themoviedb.org/3/movie/{tmdb_id}?api_key={TMDB_API_KEY}"
-        r = requests.get(url, timeout=3)
+        url = f"https://api.themoviedb.org/3/movie/{tmdb_id}"
+        r = requests.get(url, params={"api_key": TMDB_API_KEY}, timeout=4)
         if r.status_code == 200:
             path = r.json().get("poster_path")
             if path:
                 return f"{TMDB_IMAGE_BASE}{path}"
+        # rate limit / not found / other errors just fall through
     except Exception as e:
         logger.debug("Poster fetch by ID failed: %s", e)
     return None
@@ -187,16 +236,25 @@ def _search_tmdb_by_title(title: str) -> tuple[int | None, str | None]:
     TMDB search endpoint fallback when TMDB id is missing/invalid.
     Returns (tmdb_id, poster_url) or (None, None).
     """
+    if not TMDB_API_KEY:
+        return None, None
+
+    title = (title or "").strip()
+    if not title:
+        return None, None
+
     if title in _tmdb_id_cache:
         cached_id = _tmdb_id_cache[title]
         poster = _fetch_poster_by_id(cached_id)
         return cached_id, poster
+
     try:
-        url = (
-            f"https://api.themoviedb.org/3/search/movie"
-            f"?api_key={TMDB_API_KEY}&query={requests.utils.quote(title)}"
+        url = "https://api.themoviedb.org/3/search/movie"
+        r = requests.get(
+            url,
+            params={"api_key": TMDB_API_KEY, "query": title},
+            timeout=4,
         )
-        r = requests.get(url, timeout=3)
         if r.status_code == 200:
             results = r.json().get("results", [])
             if results:
@@ -209,37 +267,37 @@ def _search_tmdb_by_title(title: str) -> tuple[int | None, str | None]:
                     return found_id, f"{TMDB_IMAGE_BASE}{path}"
     except Exception as e:
         logger.debug("TMDB title search failed: %s", e)
+
     return None, None
 
 
 def get_actual_poster(tmdb_id, title: str = "") -> str:
     """
-    Fetches real poster URL from TMDB with multi-level fallback:
-      1. In-memory cache hit
-      2. Direct TMDB movie API (by id)
-      3. TMDB search API (by title) — logs missing ID mappings
-      4. Placeholder image
+    Fetches real poster URL with multi-level fallback:
+      1) In-memory cache hit (includes pre-warmed cache)
+      2) Direct TMDB movie API (by id)
+      3) TMDB search API (by title)
+      4) Placeholder image
     """
-    cache_key = str(tmdb_id)
+    tmdb_id_int = _safe_int_tmdb_id(tmdb_id)
+    cache_key = str(tmdb_id_int) if tmdb_id_int is not None else f"none:{title}"
 
-    # 1. Cache
+    # 1) Cache
     if cache_key in _poster_cache:
         return _poster_cache[cache_key]
 
     poster = None
 
-    # 2. Direct lookup
-    if tmdb_id and str(tmdb_id) != "nan":
-        poster = _fetch_poster_by_id(int(tmdb_id))
+    # 2) Direct lookup
+    if tmdb_id_int is not None:
+        poster = _fetch_poster_by_id(tmdb_id_int)
 
-    # 3. Title search fallback
+    # 3) Title search fallback
     if not poster and title:
-        logger.info("Missing poster for tmdb_id=%s (%s) — falling back to title search", tmdb_id, title)
         _, poster = _search_tmdb_by_title(title)
 
-    # 4. Placeholder
+    # 4) Placeholder
     if not poster:
-        logger.warning("No poster found for tmdb_id=%s title=%s", tmdb_id, title)
         poster = PLACEHOLDER
 
     _poster_cache[cache_key] = poster
