@@ -1,5 +1,5 @@
 
-#  Valora —  Movie Recommendation System
+#  Valora - Movie Recommendation Engine
 
 A production-ready hybrid recommendation engine combining **content similarity, collaborative filtering, and matrix factorization**, built with a modular ML architecture and an offline evaluation framework.
 
