@@ -1,7 +1,8 @@
 
 #  Valora - Movie Recommendation Engine
 
-A production-ready hybrid recommendation engine combining **content similarity, collaborative filtering, and matrix factorization**, built with a modular ML architecture and an offline evaluation framework.
+A production-ready hybrid recommendation engine combining **content similarity, collaborative filtering, and matrix factorization**, built with a modular ML architecture, offline evaluation, and an interactive Streamlit UI (including a **Genre Explorer** mode).
+
 
 Designed to handle:
 
@@ -28,43 +29,21 @@ Valora addresses these using a dynamic hybrid architecture and a rigorous evalua
 
 ##  Core Recommendation Strategies
 
-| Strategy      | Technique                      | Personalization | Use Case                   |
-| ------------- | ------------------------------ | --------------- | -------------------------- |
-| Content-Based | TF-IDF + Cosine Similarity     | Seed-driven     | New users                  |
-| Collaborative | Item-Item CF                   | Behavior-driven | Known interactions         |
-| SVD           | Matrix Factorization           | User-specific   | Latent preference modeling |
-| Hybrid        | Weighted fusion (Content + CF) | Adaptive        | Balanced ranking           |
-| Hybrid-SVD    | Content + CF + Latent factors  | Strongest       | Full personalization       |
+| Strategy         | Technique                          | Personalization | Use Case |
+|------------------|------------------------------------|-----------------|----------|
+| Content-Based    | TF-IDF + Cosine Similarity         | Seed-driven     | New users / similar items |
+| Collaborative    | Item–Item CF (similarity-based)    | Behavior-driven | Known interactions |
+| SVD              | Matrix Factorization (TruncatedSVD)| User-specific   | Latent preference modeling |
+| Hybrid           | Weighted fusion (Content + CF)     | Adaptive        | Balanced ranking |
+| Hybrid-SVD       | Content + CF + latent factors      | Strongest       | Full personalization |
+| Browse by Genre   | Filter + rank (rating/popularity)  | None            | Browse like Netflix |
 
 ---
 ## Project Pipeline
 
-<img width="3695" height="432" alt="mermaid-diagram" src="https://github.com/user-attachments/assets/aeff4d39-60ae-4915-bb8b-f5dfab2afd54" />
-
-##  Architecture Overview
-
-```
-User Input (Movie + Strategy + User ID)
-        │
-        ▼
-HybridRecommender Engine
-        │
- ┌──────────────┬───────────────┬──────────────┐
- │              │               │              │
-Content       CF Engine        SVD Model   Cold Start
-TF-IDF        Cosine Sim       TruncatedSVD  Popularity/Genre
-        │
-Score Normalization
-        │
-Dynamic Fusion (α weighted)
-        │
-Popularity Penalty (optional)
-        ▼
-Ranked Recommendations
-```
+<img width="2264" height="2107" alt="mermaid-diagram (1)" src="https://github.com/user-attachments/assets/6b6936c0-0e42-4888-8e0a-afca10ab1601" />
 
 ---
-
 ##  Engineering Highlights
 
 1. Dynamic Hybrid Weighting
