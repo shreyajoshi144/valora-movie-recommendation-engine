@@ -1,213 +1,210 @@
-# 🎬 **Valora Movie Recommender**
 
-Valora is a **hybrid movie recommendation engine** that intelligently combines **Content-Based Filtering**, **Collaborative Filtering**, and **Cold-Start strategies** to deliver personalized movie recommendations.
+#  Valora —  Movie Recommendation System
 
-The system is designed to mirror how **real-world recommender systems** work in platforms like Netflix and Amazon Prime — balancing **user behavior**, **movie metadata**, and **fallback logic** when data is sparse.
+A production-ready hybrid recommendation engine combining **content similarity, collaborative filtering, and matrix factorization**, built with a modular ML architecture and an offline evaluation framework.
 
----
+Designed to handle:
 
-## 🚀 **Key Highlights**
-
-* ✅ **Hybrid Recommendation Engine** (Content + Collaborative + Cold Start)
-* ✅ **Real-world datasets** (MovieLens + TMDB metadata)
-* ✅ **Fuzzy entity resolution** between different data sources
-* ✅ **Evaluation metrics** (Precision@K, Hit Rate)
-* ✅ **Modular, scalable architecture**
-* ✅ **Streamlit-based interactive UI**
+* Cold start
+* Data sparsity
+* Popularity bias
+* Evaluation leakage
+* Strategy benchmarking
 
 ---
 
-## 🧠 **Recommendation Strategies Implemented**
+##  Problem Statement
 
-### 1️⃣ Content-Based Filtering
+Movie recommendation systems face:
 
-* Uses **movie metadata** (overview, genres)
-* Applies **TF-IDF Vectorization**
-* Computes similarity using **Cosine Similarity**
-* Recommends movies **similar to a selected seed movie**
+* Sparse user-item interactions
+* Cold-start users and items
+* Popularity dominance
+* Evaluation bias from improper splits
 
-📌 Best for:
-
-* New users
-* Movie-centric discovery
+Valora addresses these using a dynamic hybrid architecture and a rigorous evaluation pipeline.
 
 ---
 
-### 2️⃣ Collaborative Filtering
+##  Core Recommendation Strategies
 
-* Uses **MovieLens user ratings**
-* Builds a **User–Item Interaction Matrix**
-* Computes **item-item similarity**
-* Recommends movies based on **collective user behavior**
-
-📌 Best for:
-
-* Users with historical data
-* Capturing crowd preferences
+| Strategy      | Technique                      | Personalization | Use Case                   |
+| ------------- | ------------------------------ | --------------- | -------------------------- |
+| Content-Based | TF-IDF + Cosine Similarity     | Seed-driven     | New users                  |
+| Collaborative | Item-Item CF                   | Behavior-driven | Known interactions         |
+| SVD           | Matrix Factorization           | User-specific   | Latent preference modeling |
+| Hybrid        | Weighted fusion (Content + CF) | Adaptive        | Balanced ranking           |
+| Hybrid-SVD    | Content + CF + Latent factors  | Strongest       | Full personalization       |
 
 ---
 
-### 3️⃣ Cold-Start Strategy
+## ⚙️ Architecture Overview
 
-* Activated when:
-
-  * User has no history
-  * Mapping is unavailable
-* Recommends **popular & highly rated movies**
-* Prevents empty recommendation states
-
-📌 Solves the **Cold Start Problem**
-
----
-
-## 🏗️ **System Architecture**
-
-```mermaid
-graph TD
-    A[MovieLens Ratings] --> B[Data Cleaning & Preprocessing]
-    C[TMDB Metadata] --> B
-
-    B --> D[Fuzzy Movie Matching]
-    D --> E[Unified Movie Dataset]
-
-    E --> F1[Content-Based Engine]
-    E --> F2[Collaborative Engine]
-
-    F1 --> G[Hybrid Fusion Logic]
-    F2 --> G
-
-    G --> H[Cold-Start Fallback]
-    H --> I[Streamlit UI]
+```
+User Input (Movie + Strategy + User ID)
+        │
+        ▼
+HybridRecommender Engine
+        │
+ ┌──────────────┬───────────────┬──────────────┐
+ │              │               │              │
+Content       CF Engine        SVD Model   Cold Start
+TF-IDF        Cosine Sim       TruncatedSVD  Popularity/Genre
+        │
+Score Normalization
+        │
+Dynamic Fusion (α weighted)
+        │
+Popularity Penalty (optional)
+        ▼
+Ranked Recommendations
 ```
 
 ---
 
-## 🔄 **End-to-End Workflow**
+##  Engineering Highlights
 
-1. **Data Loading**
+###  1. Dynamic Hybrid Weighting
 
-   * MovieLens ratings & movies
-   * TMDB metadata
+Alpha (content weight) adapts based on user interaction history:
 
-2. **Entity Resolution**
+* 0 ratings → content-heavy
+* Moderate history → balanced
+* Rich history → collaborative-heavy
 
-   * Fuzzy string matching aligns MovieLens movies with TMDB IDs
-
-3. **Feature Engineering**
-
-   * TF-IDF vectors for content similarity
-   * User-item matrix for collaborative filtering
-
-4. **Recommendation Inference**
-
-   * Strategy selected (Content / Collaborative / Hybrid)
-   * Scores computed and ranked
-
-5. **Evaluation**
-
-   * Precision@K
-   * Hit Rate (for users with history)
-
-6. **Presentation**
-
-   * Results displayed in Streamlit UI with posters
+Prevents overfitting and improves cold-start stability.
 
 ---
 
-## 📊 **Evaluation Metrics**
+###  2. CF Coverage Gap Fix
 
-| Metric          | Description                                                 |
-| --------------- | ----------------------------------------------------------- |
-| **Precision@K** | Fraction of recommended movies that the user actually liked |
-| **Hit Rate**    | Whether at least one relevant movie was recommended         |
+If a seed movie is missing from the collaborative similarity matrix:
 
-These metrics ensure the system is **measurable and interview-ready**.
+* System finds nearest content-similar movie
+* Uses it as CF proxy
+* Prevents empty or degenerate results
 
----
-
-## 🛠️ **Tech Stack**
-
-### Core ML & Data
-
-* **Python**
-* **Pandas**, **NumPy**
-* **Scikit-Learn**
-* **TF-IDF Vectorizer**
-* **Cosine Similarity**
-
-### Data Engineering
-
-* **MovieLens Dataset**
-* **TMDB Dataset**
-* **Fuzzy Matching (Difflib)**
-
-### Application Layer
-
-* **Streamlit**
-* **Custom CSS / Base64 backgrounds**
-* **TMDB Poster Integration**
+This ensures Hybrid ≠ Content.
 
 ---
 
-## 📂 **Project Structure**
+###  3. Proper Offline Evaluation
+
+Implements:
+
+* Per-user chronological 80/20 split
+* Train-only hybrid alpha computation
+* User-centric seed selection for evaluation
+* No test leakage
+
+Metrics:
+
+* Precision@K
+* Recall@K
+* Hit Rate
+* RMSE (for SVD)
+
+Avoids the common zero-precision bug caused by global seed usage.
+
+---
+
+###  4. Matrix Factorization
+
+* sklearn TruncatedSVD
+* Mean-centered ratings
+* Full reconstructed prediction matrix
+* Global latent ranking fallback for unknown users
+
+No heavy Surprise dependency → deployable anywhere.
+
+---
+
+###  5. Popularity Bias Control
+
+Optional ranking adjustment:
+Allows niche content discovery.
+
+---
+
+###  6. Robust Poster Retrieval System
+
+* Cached API calls
+* Fallback via TMDB search endpoint
+* Placeholder fallback
+* No broken UI states
+
+---
+
+##  Evaluation Framework
+
+The system supports multi-strategy benchmarking:
+
+| Metric      | Purpose                              |
+| ----------- | ------------------------------------ |
+| Precision@K | Recommendation accuracy              |
+| Recall@K    | Coverage of relevant items           |
+| Hit Rate    | At least one relevant item retrieved |
+| RMSE        | Rating prediction quality            |
+
+Includes cross-strategy comparison for performance diagnostics.
+
+---
+
+##  Project Structure
 
 ```
 valora-movie-recommender/
 │
-├── data/
-│   ├── tmdb_5000_movies.csv
-│   ├── movielens_movies.csv
-│   ├── movielens_ratings.csv
-│
+├── app.py
 ├── recommender/
+│   ├── hybrid_engine.py
 │   ├── content_based.py
 │   ├── collaborative.py
-│   ├── cold_start.py
-│   ├── hybrid_engine.py
+│   ├── matrix_factorization.py
 │   ├── evaluation.py
+│   ├── cold_start.py
 │   └── utils.py
 │
-├── app.py
+├── data/
+├── assets/
 ├── requirements.txt
 └── README.md
 ```
 
 ---
 
-## 🧩 **Design Principles**
+##  Deployment Ready
 
-* **Separation of concerns**
-* **Fail-safe fallbacks**
-* **Extensible hybrid logic**
-* **Production-like data flow**
+* Streamlit Cloud
+* AWS EC2
+* Render
+* Azure
+* Railway
 
-This structure makes the system easy to:
-
-* Extend with **SVD / Matrix Factorization**
-* Replace similarity metrics
-* Add **Neural Collaborative Filtering**
+Lightweight dependencies, no GPU requirement.
 
 ---
 
-## 🚧 **Future Improvements**
+##  Tech Stack
 
-* 🔹 Matrix Factorization (SVD)
-* 🔹 Neural Collaborative Filtering
-* 🔹 Learning-to-Rank layer
-* 🔹 Online user feedback loop
-* 🔹 Deployment on cloud (AWS / GCP)
-
----
-
-## 🎯 **Why This Project Matters**
-
-Velora demonstrates:
-
-* Practical understanding of **recommendation systems**
-* Real-world data challenges (ID mismatch, sparsity)
-* Strong **ML + Data Engineering fundamentals**
-* Ability to build **end-to-end systems**, not just notebooks
+* Python
+* Streamlit
+* Pandas
+* NumPy
+* Scikit-learn
+* SciPy
+* Requests
 
 ---
 
-⭐ *If you like this project, give it a star — it helps a lot!*
+##  This Demonstrates
+
+* Applied machine learning engineering
+* Hybrid model design
+* Evaluation rigor
+* Data leakage prevention
+* Cold-start strategy design
+* Ranking system thinking
+* Model comparison & diagnostics
+
+---
