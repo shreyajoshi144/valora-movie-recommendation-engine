@@ -282,7 +282,7 @@
 #     tmdb_id_int = _safe_int_tmdb_id(tmdb_id)
 #     cache_key = str(tmdb_id_int) if tmdb_id_int is not None else f"none:{title}"
 #
-#     # 1) Cache
+#     # 1) Cachev
 #     if cache_key in _poster_cache:
 #         return _poster_cache[cache_key]
 #
