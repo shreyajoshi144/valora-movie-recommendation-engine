@@ -4,9 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b16b16af-00c8-417e-8c89-4e945c59bf40" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.env" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/assets/bg.png" afterDir="false" />
+    <list default="true" id="b16b16af-00c8-417e-8c89-4e945c59bf40" name="Changes" comment="new changes with hardcode api!">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -101,6 +100,10 @@
         </entry>
       </map>
     </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="new changes with hardcode api!" />
+    <option name="LAST_COMMIT_MESSAGE" value="new changes with hardcode api!" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
