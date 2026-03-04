@@ -318,6 +318,9 @@ import re
 import logging
 from pathlib import Path
 from difflib import get_close_matches
+from dotenv import load_dotenv
+
+load_dotenv()
 
 import numpy as np
 import pandas as pd
@@ -336,8 +339,7 @@ _tmdb_id_cache: dict = {}   # title → tmdb_id fallback cache
 
 # ✅ FIX: getenv needs env var NAME, not the key value
 # Keep env-first; optionally fallback hardcode for testing
-TMDB_API_KEY = os.getenv("TMDB_API_KEY") or "3b2b7ca05ea4688646c32685258868ea"
-
+TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 PLACEHOLDER = "https://placehold.co/500x750/1a1a1a/e50914?text=Poster+Unavailable"
 
