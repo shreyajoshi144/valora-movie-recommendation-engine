@@ -12,7 +12,7 @@ New additions
 • evaluate_full()             — proper held-out evaluation pipeline
 • compare_strategies()        — multi-strategy comparison DataFrame
 
-Chronological split design (audited)
+Chronological split design
 ──────────────────────────────────────
 - Per user: sort by timestamp, take last 20% as test.
 - Users with < min_ratings_per_user (default 5) go fully into train.
@@ -129,7 +129,7 @@ def train_test_split_ratings(
     """
     Per-user chronological 80/20 split.
 
-    Design (audited)
+    Design
     ─────────────────
     • Sort each user's ratings by timestamp (if present) or stable row order.
     • split_idx = max(1, int(n * 0.8)) — guarantees ≥ 1 rating in train.

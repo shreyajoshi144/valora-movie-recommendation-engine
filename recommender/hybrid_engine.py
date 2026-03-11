@@ -1,26 +1,7 @@
 """
 hybrid_engine.py — Production Hybrid Recommender for Valora.
 
-Bug fixes in this version
-──────────────────────────
-1. COLLABORATIVE FALLBACK: When seed movie isn't in CF similarity matrix
-   (60% coverage gap), uses a CF-proxy (nearest covered movie by content
-   similarity) instead of returning [].
-
-2. HYBRID GENUINELY DIFFERENT FROM CONTENT: Same CF-proxy mechanism ensures
-   Hybrid always has a real CF signal, so its ranking differs from pure
-   Content-Based even when the seed isn't in the CF index.
-
-3. HYBRID-SVD WITH NO USER: Uses global SVD mean predictions (average across
-   all users) as a population-level latent signal so Hybrid-SVD produces
-   different rankings from Hybrid even without a specific user_id.
-
-4. USER-CENTRIC EVALUATION: New recommend_for_user() method picks each user's
-   own top-rated training movies as seeds and unions recommendations — fixes
-   the zero-precision evaluation bug caused by using one fixed seed for ALL
-   users in evaluate_full().
 """
-
 import pandas as pd
 import numpy as np
 import logging
@@ -103,9 +84,6 @@ def _fuse_scores(content_norm, collab_norm, alpha, svd_norm=None, use_svd=False)
     return result
 
 
-# ──────────────────────────────────────────────────────────────────────
-# FIX #2: CF proxy — find nearest CF-covered movie via content similarity
-# ──────────────────────────────────────────────────────────────────────
 
 def _find_cf_proxy(seed_tmdb_id: int, cf_index: set, search_depth: int = 50):
     """
@@ -157,7 +135,6 @@ class HybridRecommender:
 
     def set_training_ratings(self, ratings_df: pd.DataFrame | None):
         """Inject a training split (used for evaluation).
-
         This updates:
         - alpha calibration (cold-start / dynamic blending)
         - CF similarity matrix (item-item)
@@ -184,7 +161,8 @@ class HybridRecommender:
         # Refit SVD (train-split)
         try:
             self.svd_model.fit(self.user_item_matrix)
-            self._svd_tmdb_ids = self.user_item_matrix.columns.tolist()
+            self._svd_tmdb_ids    = self.user_item_matrix.columns.tolist()
+            self._svd_global_mean = self.svd_model._predicted.mean(axis=0)
         except Exception:
             pass
 
@@ -200,8 +178,9 @@ class HybridRecommender:
         k = top_k if top_k else self.top_k
 
         if strategy == "Content-Based" and seed_movie_id:
-            recs = content_based_recommender(seed_movie_id, top_k=k)
-            return self._maybe_penalise(recs, "similarity_score", penalise_popularity)
+            fetch_k = k * 8 if penalise_popularity else k
+            recs = content_based_recommender(seed_movie_id, top_k=fetch_k)
+            return self._maybe_penalise(recs, "similarity_score", penalise_popularity, top_k=k)
 
         # FIX #1: Collaborative with CF-proxy fallback
         if strategy == "Collaborative" and seed_movie_id:
@@ -222,13 +201,6 @@ class HybridRecommender:
 
     # FIX #4: User-centric recommendation for offline evaluation
     def recommend_for_user(self, user_id, strategy="Hybrid", top_k=10, n_seeds=3):
-        """
-        User-centric eval: uses user's own top-rated training movies as seeds.
-        Unions recommendations across seeds to maximise test-set recall.
-
-        This fixes the zero-precision bug where one fixed seed was used for
-        all users regardless of their actual taste profile.
-        """
         if self._alpha_ratings is None:
             return []
 
@@ -266,18 +238,19 @@ class HybridRecommender:
     # ── Internal: Collaborative with fallback ─────────────────────────
 
     def _collaborative_with_fallback(self, seed_movie_id, k, penalise_popularity):
+        fetch_k = k * 8 if penalise_popularity else k
         recs = recommend_similar_movies_cf(
-            seed_movie_id, self.cf_similarity_df, self.tmdb_df, top_k=k
+            seed_movie_id, self.cf_similarity_df, self.tmdb_df, top_k=fetch_k
         )
         if not recs:
             proxy_id = _find_cf_proxy(seed_movie_id, self._cf_index)
             if proxy_id:
                 recs = recommend_similar_movies_cf(
-                    proxy_id, self.cf_similarity_df, self.tmdb_df, top_k=k
+                    proxy_id, self.cf_similarity_df, self.tmdb_df, top_k=fetch_k
                 )
         if not recs:
-            recs = content_based_recommender(seed_movie_id, top_k=k)
-        return self._maybe_penalise(recs, "similarity_score", penalise_popularity)
+            recs = content_based_recommender(seed_movie_id, top_k=fetch_k)
+        return self._maybe_penalise(recs, "similarity_score", penalise_popularity, top_k=k)
 
     # ── Internal: SVD-only ────────────────────────────────────────────
 
@@ -291,7 +264,7 @@ class HybridRecommender:
         top_ids = sorted(svd_scores, key=lambda x: svd_scores[x], reverse=True)[:k]
         return self._enrich(top_ids, svd_scores)
 
-    # ── Internal: global SVD signal (FIX #3) ─────────────────────────
+    # ── Internal: global SVD signal  ─────────────────────────
 
     def _global_svd_scores(self, top_n):
         """Mean predicted rating across all users — population-level latent signal."""
@@ -299,11 +272,11 @@ class HybridRecommender:
         return {self._svd_tmdb_ids[i]: float(self._svd_global_mean[i])
                 for i in top_idx}
 
-    # ── Internal: hybrid fusion (FIX #2 + #3 inside) ─────────────────
+    # ── Internal: hybrid fusion  ─────────────────
 
     def _hybrid_recommend(self, user_id, seed_movie_id, k, use_svd, penalise_popularity):
         alpha       = _compute_alpha(user_id, self._alpha_ratings)
-        candidate_k = min(max(k * 5, 50), 100)
+        candidate_k = min(max(k * 8, 80), 200) if penalise_popularity else min(max(k * 5, 50), 100)
 
         # Content
         content_recs = content_based_recommender(seed_movie_id, top_k=candidate_k)
@@ -311,7 +284,7 @@ class HybridRecommender:
             _recs_to_score_dict(content_recs, "similarity_score")
         )
 
-        # FIX #2: CF with proxy
+        # CF with proxy
         collab_recs = recommend_similar_movies_cf(
             seed_movie_id, self.cf_similarity_df, self.tmdb_df, top_k=candidate_k
         )
@@ -325,7 +298,7 @@ class HybridRecommender:
             _recs_to_score_dict(collab_recs, "similarity_score")
         )
 
-        # FIX #3: SVD signal (personalised or global)
+        # SVD signal (personalised or global)
         svd_norm = {}
         if use_svd:
             if user_id is not None:
@@ -367,13 +340,15 @@ class HybridRecommender:
             })
         return results
 
-    def _maybe_penalise(self, recs, score_key, do_penalise):
+    def _maybe_penalise(self, recs, score_key, do_penalise, top_k=None):
         if not do_penalise:
-            return recs
+            # Still trim to top_k if an expanded pool was passed
+            return recs[:top_k] if top_k else recs
         score_dict = {r["tmdb_id"]: r.get(score_key, 0.0) for r in recs}
         penalised  = normalize_scores(apply_popularity_penalty(score_dict, self.tmdb_df))
         for r in recs:
             v = round(penalised.get(r["tmdb_id"], 0.0), 4)
             r[score_key]          = v
             r["similarity_score"] = v
-        return sorted(recs, key=lambda x: x.get(score_key, 0.0), reverse=True)
+        sorted_recs = sorted(recs, key=lambda x: x.get(score_key, 0.0), reverse=True)
+        return sorted_recs[:top_k] if top_k else sorted_recs

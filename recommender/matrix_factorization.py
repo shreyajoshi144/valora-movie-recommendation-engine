@@ -1,7 +1,5 @@
 """
 matrix_factorization.py — SVD-based collaborative filtering.
-Uses sklearn TruncatedSVD (no Surprise dependency required).
-Backward-compatible drop-in: exposes recommend_svd(user_id, top_k).
 """
 
 import numpy as np

@@ -36,7 +36,7 @@ def content_based_recommender(seed_movie_id, top_k=6):
             "tmdb_id": movie['tmdb_id'],
             "title": movie['title'],
             "poster_path": movie.get('poster_path', None),
-            "similarity_score": score
+            "similarity_score": score,
         })
 
     return recommendations

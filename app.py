@@ -5,6 +5,7 @@ app.py — Valora Movie Recommender  |  Streamlit UI
 • Full evaluation panel (Precision@K, Recall@K, Hit Rate, RMSE)
 • Strategy comparison table
 """
+
 import streamlit as st
 import pandas as pd
 import os
@@ -35,9 +36,6 @@ st.set_page_config(
     page_icon="🎬",
     layout="wide",
 )
-
-
-
 # ─────────────────────────────────────────────────────────────────────
 # THEME
 # ─────────────────────────────────────────────────────────────────────
@@ -204,7 +202,6 @@ def apply_netflix_theme(bg_path='assets/bg.png'):
 
 apply_netflix_theme(NETFLIX_BG_PATH)
 
-
 # ─────────────────────────────────────────────────────────────────────
 # DATA + ENGINE INIT
 # ─────────────────────────────────────────────────────────────────────
@@ -219,11 +216,12 @@ def initialize_system():
     ratings  = build_tmdb_ratings_matrix(ml_r, mapping)
     engine   = HybridRecommender()
     engine.set_mapped_ratings(ratings)
-    return tmdb, ratings, engine
+    eval_engine = HybridRecommender()
+    eval_engine.set_mapped_ratings(ratings)
+    return tmdb, ratings, engine, eval_engine
 
 
-tmdb_df, mapped_ratings, hybrid_engine = initialize_system()
-
+tmdb_df, mapped_ratings, hybrid_engine, eval_engine = initialize_system()
 
 # ─────────────────────────────────────────────────────────────────────
 # Helpers
@@ -238,7 +236,6 @@ def score_label_for_strategy(strategy: str) -> str:
         "Hybrid-SVD": "Blended score (normalised)",
         "SVD": "Predicted rating (normalised)",
     }.get(s, "Score")
-
 
 # ─────────────────────────────────────────────────────────────────────
 # Genre Explorer helpers
@@ -272,8 +269,6 @@ def _all_genres_from_tmdb(tmdb_df: pd.DataFrame) -> list[str]:
             s.add(name)
     return sorted(s)
 
-
-
 # ─────────────────────────────────────────────────────────────────────
 # SIDEBAR
 # ─────────────────────────────────────────────────────────────────────
@@ -293,8 +288,6 @@ with st.sidebar:
         """,
         unsafe_allow_html=True
     )
-    movie_list = sorted(tmdb_df["title"].unique())
-    # --- Sidebar: Controls  ---
     movie_list = sorted(tmdb_df["title"].unique())
     selected_movie_name = st.selectbox(
         "Search movie",
@@ -353,6 +346,7 @@ with st.sidebar:
     st.divider()
 
     predict_btn = st.button("Get recommendations", use_container_width=True)
+
 # ─────────────────────────────────────────────────────────────────────
 # MAIN AREA
 # ─────────────────────────────────────────────────────────────────────
@@ -379,8 +373,6 @@ with st.container():
         unsafe_allow_html=True
     )
     st.markdown("<hr style='border:0.5px solid rgba(255,255,255,0.08); margin-top:10px; margin-bottom:20px;'>", unsafe_allow_html=True)
-
-import streamlit as st
 
 CONTACT_EMAIL = "shreyaajoshi88@email.com"
 
@@ -497,14 +489,11 @@ if strategy == "GENRE":
     )
     st.markdown("---")
 
-
-
 if strategy == "SVD" and selected_user is None:
     st.warning("SVD strategy requires a User ID. Please select one in the sidebar.")
 if strategy == "Hybrid-SVD" and selected_user is None:
     st.info("💡 Hybrid-SVD uses global latent-factor scores without a User ID. "
             "Select a User ID for fully personalised SVD fusion.")
-
 
 # ─────────────────────────────────────────────────────────────────────
 # RECOMMENDATIONS
@@ -587,7 +576,6 @@ if predict_btn:
                             </div>
                         """, unsafe_allow_html=True)
 
-
                 # ── Full offline comparison table ────────────────────────
                 if show_compare:
                     st.divider()
@@ -620,19 +608,30 @@ if predict_btn:
                             strategy_funcs,
                             mapped_ratings,
                             top_k=top_k,
-                            svd_model=hybrid_engine.svd_model,
+                            svd_model=eval_engine.svd_model,
                             max_users=100,
-                            engine=hybrid_engine,   # FIX: user-centric seeding
+                            engine=eval_engine,
                         )
 
                     # Format
                     fmt = {c: "{:.3f}" for c in cmp_df.columns if c != "n_users_evaluated"}
                     try:
-                        styled = cmp_df.style.format(fmt).background_gradient(cmap="RdYlGn", axis=0)
-                    except Exception:
-                        styled = cmp_df
-                    st.dataframe(styled, use_container_width=True)
+                        import matplotlib  # required by pandas Styler.background_gradient
 
+                        styled = (
+                            cmp_df.style
+                            .format(fmt)
+                            .background_gradient(cmap="RdYlGn", axis=0)
+                        )
+                        st.dataframe(styled, use_container_width=True)
+
+                    except ImportError:
+                        # Safe fallback when matplotlib is not installed on Streamlit Cloud
+                        st.dataframe(cmp_df.round(3), use_container_width=True)
+
+                    except Exception as e:
+                        st.warning(f"Could not render styled comparison table: {e}")
+                        st.dataframe(cmp_df.round(3), use_container_width=True)
             else:
                 st.warning("No recommendations found. Try a different movie or strategy.")
 else:

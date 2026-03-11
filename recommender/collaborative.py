@@ -93,7 +93,8 @@ def recommend_similar_movies_cf(
         .sort_values(by="similarity_score", ascending=False)
     )
 
-    return recommendations.to_dict(orient="records")
+    result = recommendations.to_dict(orient="records")
+    return result
 
 
 # -------------------------------------------------

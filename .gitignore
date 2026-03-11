@@ -1,6 +1,18 @@
+# Python
 __pycache__/
 *.pyc
-.idea/
-.env
+*.pyo
+*.pyd
+
+# Virtual environments
 .venv/
-.venv1/
+venv/
+
+# Mac system files
+.DS_Store
+
+# Screenshots / images not part of project
+*.png
+
+# Environment variables
+.env
