@@ -1,99 +1,125 @@
 
-#  Valora - Movie Recommendation Engine
+# 🎬 Valora - Hybrid Movie Recommendation Engine
 
-A production-ready hybrid recommendation engine combining **content similarity, collaborative filtering, and matrix factorization**, built with a modular ML architecture, offline evaluation, and an interactive Streamlit UI (including a **Genre Explorer** mode).
+A production-ready hybrid recommendation system that combines **content-based filtering, collaborative filtering, and matrix factorization** to deliver accurate and personalized movie recommendations.
 
-
-Designed to handle:
-
-* Cold start
-* Data sparsity
-* Popularity bias
-* Evaluation leakage
-* Strategy benchmarking
+Built with a modular machine learning architecture, offline evaluation framework, and an interactive Streamlit application, Valora addresses common recommendation system challenges such as **cold start, sparse interactions, popularity bias, and realistic model evaluation**.
 
 ---
 
-##  Problem Statement
+## Tech Stack
 
-Movie recommendation systems face:
+**Python • Pandas • NumPy • Scikit-learn • SciPy • Streamlit • Requests**
+
+---
+
+## Problem Statement
+
+Traditional recommendation systems often struggle with:
 
 * Sparse user-item interactions
-* Cold-start users and items
-* Popularity dominance
-* Evaluation bias from improper splits
+* Cold-start users and movies
+* Popularity bias toward highly rated titles
+* Evaluation leakage caused by improper train/test splits
 
-Valora addresses these using a dynamic hybrid architecture and a rigorous evaluation pipeline.
+Valora addresses these challenges through a hybrid recommendation architecture that combines multiple recommendation strategies with rigorous offline evaluation.
+
+---
+
+## Project Preview
+
+<img width="1470" height="956" alt="Screenshot 2026-06-28 at 5 00 23 PM" src="https://github.com/user-attachments/assets/2f7ca966-4074-4577-bf35-697a2ad5212a" />
+
+<img width="1470" height="956" alt="Screenshot 2026-06-28 at 5 01 11 PM" src="https://github.com/user-attachments/assets/111593aa-bbaf-4bb1-a514-5940b8d118e4" />
+
+<img width="1470" height="956" alt="Screenshot 2026-06-28 at 5 01 52 PM" src="https://github.com/user-attachments/assets/d854654d-0203-44ad-aace-b6d8084811a7" />
+
+<img width="1470" height="956" alt="Screenshot 2026-06-28 at 5 01 25 PM" src="https://github.com/user-attachments/assets/24ff7ba9-1031-49bf-90cd-b3349f8b89eb" />
 
 ---
 
-##  Core Recommendation Strategies
 
-| Strategy         | Technique                          | Personalization | Use Case |
-|------------------|------------------------------------|-----------------|----------|
-| Content-Based    | TF-IDF + Cosine Similarity         | Seed-driven     | New users / similar items |
-| Collaborative    | Item–Item CF (similarity-based)    | Behavior-driven | Known interactions |
-| SVD              | Matrix Factorization (TruncatedSVD)| User-specific   | Latent preference modeling |
-| Hybrid           | Weighted fusion (Content + CF)     | Adaptive        | Balanced ranking |
-| Hybrid-SVD       | Content + CF + latent factors      | Strongest       | Full personalization |
-| Browse by Genre   | Filter + rank (rating/popularity)  | None            | Browse like Netflix |
+## Live Demo : https://valora-movies.streamlit.app/
+
+## Recommendation Strategies
+
+| Strategy                | Technique                  | Personalization    | Best For                       |
+| ----------------------- | -------------------------- | ------------------ | ------------------------------ |
+| Content-Based           | TF-IDF + Cosine Similarity | Seed-based         | New users & similar movies     |
+| Collaborative Filtering | Item-Item Similarity       | Behavior-based     | Existing users                 |
+| Matrix Factorization    | Truncated SVD              | Personalized       | Learning latent preferences    |
+| Hybrid                  | Content + Collaborative    | Adaptive           | Balanced recommendations       |
+| Hybrid-SVD              | Content + CF + SVD         | Fully Personalized | Highest recommendation quality |
+| Genre Explorer          | Genre Filtering + Ranking  | None               | Browsing by genre              |
 
 ---
-## Project Pipeline
+
+# Project Architecture
 
 <img width="2264" height="2107" alt="mermaid-diagram (1)" src="https://github.com/user-attachments/assets/6b6936c0-0e42-4888-8e0a-afca10ab1601" />
 
----
-##  Engineering Highlights
-
-1. Dynamic Hybrid Weighting
-   
-Adaptive blending of content and collaborative signals based on user rating history.
-Cold-start users receive higher content weighting, while experienced users leverage behavioral signals.
-
-3. CF Coverage Handling
-
-Implements content-similarity proxy when a seed movie is absent from the CF matrix.
-Prevents empty outputs and ensures meaningful hybrid differentiation.
-
-3. Leakage-Free Offline Evaluation
-
-Per-user chronological 80/20 split with user-centric seed selection.
-Evaluated using Precision@K, Recall@K, Hit Rate, and RMSE to ensure realistic performance measurement.
-
-4. Matrix Factorization (SVD)
-
-Mean-centered ratings with TruncatedSVD to capture latent user–item factors.
-Includes personalized ranking and global fallback for unknown users.
-
-5. Popularity Bias Mitigation
-
-Optional log-based popularity penalty to reduce dominance of highly popular titles and improve ranking diversity.
-
-6. Robust Production Utilities
-
-Poster retrieval with caching and multi-level fallback to prevent UI failures and broken states.
 
 ---
 
-##  Evaluation Framework
+# Key Features
 
-The system supports multi-strategy benchmarking:
-
-| Metric      | Purpose                              |
-| ----------- | ------------------------------------ |
-| Precision@K | Recommendation accuracy              |
-| Recall@K    | Coverage of relevant items           |
-| Hit Rate    | At least one relevant item retrieved |
-| RMSE        | Rating prediction quality            |
-
-Includes cross-strategy comparison for performance diagnostics.
+* Hybrid recommendation engine combining multiple algorithms
+* Dynamic weighting based on user interaction history
+* Cold-start handling for new users and unseen movies
+* Popularity bias mitigation using configurable penalties
+* Leakage-free offline evaluation pipeline
+* Interactive Streamlit interface with movie posters
+* Genre Explorer for Netflix-style browsing
+* Cached poster retrieval with graceful fallback handling
 
 ---
 
-##  Project Structure
+# Engineering Highlights
 
-```
+### Dynamic Hybrid Weighting
+
+Recommendation scores are adaptively blended based on the user's rating history. New users receive stronger content-based recommendations, while experienced users benefit more from collaborative filtering.
+
+### Cold-Start Handling
+
+When collaborative filtering cannot generate recommendations, the engine automatically falls back to content similarity, ensuring reliable recommendations without empty results.
+
+### Matrix Factorization
+
+Uses mean-centered ratings with TruncatedSVD to learn latent user preferences and improve recommendation quality beyond explicit similarity methods.
+
+### Leakage-Free Evaluation
+
+Implements a per-user chronological 80/20 train-test split with user-centric seed selection to avoid data leakage and produce realistic evaluation metrics.
+
+### Popularity Bias Mitigation
+
+Supports optional log-based popularity penalties to increase recommendation diversity and reduce over-representation of blockbuster movies.
+
+### Production Utilities
+
+Poster retrieval includes caching, retry logic, and multi-level fallbacks to ensure a smooth user experience.
+
+---
+
+# Evaluation Framework
+
+The project includes an offline benchmarking framework for comparing multiple recommendation strategies.
+
+| Metric      | Purpose                                                  |
+| ----------- | -------------------------------------------------------- |
+| Precision@K | Recommendation accuracy                                  |
+| Recall@K    | Relevant item coverage                                   |
+| Hit Rate    | Whether at least one relevant recommendation is returned |
+| RMSE        | Rating prediction quality                                |
+
+The evaluation pipeline enables objective comparison between Content-Based, Collaborative, Hybrid, and Matrix Factorization models.
+
+---
+
+# Project Structure
+
+```text
 valora-movie-recommender/
 │
 ├── app.py
@@ -114,52 +140,56 @@ valora-movie-recommender/
 
 ---
 
-##  Tech Stack
+# What This Project Demonstrates
 
-* Python
-* Streamlit
-* Pandas
-* NumPy
-* Scikit-learn
-* SciPy
-* Requests
-
----
-
-##  This Project Demonstrates
-
-* Applied machine learning engineering
-* Hybrid model design
-* Evaluation rigor
-* Data leakage prevention
-* Cold-start strategy design
-* Ranking system thinking
-* Model comparison & diagnostics
-
----
-## Future Improvements
-
-* Neural collaborative filtering
-* Implicit feedback modeling
-* Time-aware recommendation (temporal decay)
-* ANN search (FAISS) for scalability
-* Online A/B testing framework
+* Machine Learning Engineering
+* Recommendation System Design
+* Hybrid Model Architecture
+* Offline Evaluation Methodology
+* Cold-Start Strategy Design
+* Ranking System Optimization
+* Production-Oriented ML Development
+* Modular Python Architecture
 
 ---
 
-## Run Locally
-git clone https://github.com/shreyajoshi144/valora-movie-recommendation-engine.git    
-cd valora-movie-recommendation-engine    
-pip install -r requirements.txt    
-streamlit run app.py       
+# Future Improvements
 
-App will launch at:
+* Neural Collaborative Filtering
+* Implicit Feedback Models
+* Time-Aware Recommendations
+* FAISS-Based Approximate Nearest Neighbor Search
+* Online A/B Testing Framework
+* Model Monitoring & Drift Detection
+
+---
+
+# Run Locally
+
+```bash
+git clone https://github.com/shreyajoshi144/valora-movie-recommendation-engine.git
+
+cd valora-movie-recommendation-engine
+
+pip install -r requirements.txt
+
+streamlit run app.py
+```
+
+The application will be available at:
+
+```text
 http://localhost:8501
+```
 
-Ensure the following files exist inside the data/ folder:
+Required datasets inside the `data/` directory:
 
 * tmdb_5000_movies.csv
 * movielens_movies.csv
 * movielens_ratings.csv
+
 ---
-If you found this project useful, consider starring the repository.
+
+If you found this project useful, consider ⭐ starring the repository.
+
+
